@@ -1,78 +1,88 @@
 from django.db import models
-from django.contrib.auth.models import AbstractUser
+from django.utils import timezone
 
 
-class menuItem(models.Model):
-    name = models.CharField(max_length=80)
-    category = models.CharField(max_length=50)
-    price = models.IntegerField()
-    availability = models.BooleanField()
+class MenuItem(models.Model):
+    CATEGORY_CHOICES = [
+        ('main', 'Main Dish'),
+        ('drink', 'Drink'),
+        ('dessert', 'Dessert'),
+    ]
 
+    name = models.CharField(max_length=100)
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
+    price = models.DecimalField(max_digits=8, decimal_places=2)
+    availability = models.BooleanField(default=True)
 
     def __str__(self):
-        return self.name
+        return f"{self.name} - ₦{self.price}"
 
 
 class Table(models.Model):
-    table_number = models.IntegerField()
-    capacity = models.IntegerField()
-
-    status_choices = [
-        ('available', 'Available'),
+    STATUS_CHOICES = [
+        ('free', 'Free'),
         ('reserved', 'Reserved'),
         ('occupied', 'Occupied'),
     ]
-    
-    status = models.CharField(max_length=10, choices=status_choices, default='available')
+    number = models.IntegerField(unique=True)
+    capacity = models.PositiveIntegerField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='free')
 
     def __str__(self):
-        return self.name
-    
-    
-class Inventory(models.model):
-    item_name = models.CharField(max_length=50)
-    quantiy = models.PositiveIntegerField(max_length=50)
-    alert_level = models.PositiveIntegerField(max_length=50)
-    
-    # def __str__(self):
-    #     return self.quantity <= self.alert_level
-    
-    def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
-        if self.is_low_stock():
-            print(f"ALERT: {self.item_name} is critically low!")
-    
-    
-    
-class Order(models.model):
-    custormer_name = models.CharField(max_length=100)
-    table = models.ForeignKey("app.Model", verbose_name=_(""), on_delete=models.CASCADE)
-    total_price = models.PositiveIntegerField(max_length=20)
-    timestamp = models.DateTimeField(auto_now_add=True)
-    status_choices = [
+        return f"Table {self.number} ({self.status})"
+
+
+class Inventory(models.Model):
+    item_name = models.CharField(max_length=100)
+    quantity = models.FloatField()
+    threshold = models.FloatField(default=10)
+
+    def is_low(self):
+        return self.quantity <= self.threshold
+
+    def __str__(self):
+        return f"{self.item_name} - {self.quantity}"
+
+
+class Order(models.Model):
+    STATUS_CHOICES = [
         ('pending', 'Pending'),
-        ('preparing','Preparing'),
+        ('preparing', 'Preparing'),
         ('served', 'Served'),
-        ('completed','Completed'),
+        ('completed', 'Completed'),
     ]
-    status = models.CharField(max_length=20, choices=status_choices,default='preparing')
+
+    customer_name = models.CharField(max_length=100)
+    table = models.ForeignKey(Table, on_delete=models.SET_NULL, null=True)
+    total_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    timestamp = models.DateTimeField(default=timezone.now)
 
     def __str__(self):
-        return self.Order
-    
-class Reservertion(models.Model):
-    customer_name = models.CharField(max_length=50)
-    contact = models.CharField(max_length=20)
-    table = models.ForeignKey( table = models.ForeignKey("app.Model", verbose_name=(""), on_delete=models.CASCADE))
-    reservation_time = models.DateTimeField(auto_now_add=True)
-    status_choices = [
-        ('active','Active'),
-        ('completed','Completed'),
-        ('cancelled','Cancelled'),
-    ]
-    status = models.CharField(max_length=50, choices = status_choices, default='active')
-    
-    
+        return f"Order #{self.id} - {self.customer_name}"
+
+
+class OrderItem(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
+    menu_item = models.ForeignKey(MenuItem, on_delete=models.CASCADE)
+    quantity = models.PositiveIntegerField(default=1)
+
     def __str__(self):
-        return self.name
-    
+        return f"{self.menu_item.name} x {self.quantity}"
+
+
+class Reservation(models.Model):
+    STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    customer_name = models.CharField(max_length=100)
+    contact = models.CharField(max_length=20)
+    table = models.ForeignKey(Table, on_delete=models.CASCADE)
+    reservation_time = models.DateTimeField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+
+    def __str__(self):
+        return f"Reservation for {self.customer_name} (Table {self.table.number})"
