@@ -8,7 +8,8 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .models import MenuItem, Table, Inventory, Order, Reservation
 from .serializers import (
     RegisterSerializer,
-    UserSerializer,
+    # UserSerializer,
+    LoginSerializer,
     MenuItemSerializer,
     TableSerializer,
     InventorySerializer,
@@ -30,6 +31,11 @@ class RegisterView(CreateAPIView):
     Staff/Admin should be created via admin panel or protected endpoint.
     """
     serializer_class = RegisterSerializer
+    permission_classes = [permissions.AllowAny]
+    
+class LoginView(CreateAPIView):
+    
+    serializer_class = LoginSerializer
     permission_classes = [permissions.AllowAny]
 
 
