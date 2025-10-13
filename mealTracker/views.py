@@ -8,7 +8,6 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .models import MenuItem, Table, Inventory, Order, Reservation
 from .serializers import (
     RegisterSerializer,
-    # UserSerializer,
     LoginSerializer,
     MenuItemSerializer,
     TableSerializer,
@@ -18,13 +17,12 @@ from .serializers import (
 )
 from .permissions import IsStaffOrAdmin, IsAdmin
 
-
 User = get_user_model()
 
 
-# -------------------------------------------
-# ✅ USER REGISTRATION
-# -------------------------------------------
+# ------------------------------------------------------------
+# ✅ USER REGISTRATION & LOGIN
+# ------------------------------------------------------------
 class RegisterView(CreateAPIView):
     """
     Public endpoint to register new customers.
@@ -32,58 +30,58 @@ class RegisterView(CreateAPIView):
     """
     serializer_class = RegisterSerializer
     permission_classes = [permissions.AllowAny]
-    
-class LoginView(CreateAPIView):
-    
+
+
+class LoginView(TokenObtainPairView):
+    """
+    Handles user login and returns JWT access & refresh tokens.
+    """
     serializer_class = LoginSerializer
     permission_classes = [permissions.AllowAny]
 
 
-# -------------------------------------------
+# ------------------------------------------------------------
 # ✅ MENU ITEMS (Public read, Staff/Admin modify)
-# -------------------------------------------
+# ------------------------------------------------------------
 class MenuItemViewSet(viewsets.ModelViewSet):
     queryset = MenuItem.objects.all()
     serializer_class = MenuItemSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
-    def perform_create(self, serializer):
-        if not self.request.user.is_staff and not self.request.user.is_superuser:
-            return Response({'error': 'Only staff can add menu items'}, status=status.HTTP_403_FORBIDDEN)
-        serializer.save()
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            permission_classes = [permissions.IsAuthenticated, IsStaffOrAdmin]
+        else:
+            permission_classes = [permissions.AllowAny]
+        return [perm() for perm in permission_classes]
 
 
-# -------------------------------------------
+# ------------------------------------------------------------
 # ✅ TABLES (Staff/Admin only)
-# -------------------------------------------
+# ------------------------------------------------------------
 class TableViewSet(viewsets.ModelViewSet):
     queryset = Table.objects.all()
     serializer_class = TableSerializer
     permission_classes = [permissions.IsAuthenticated, IsStaffOrAdmin]
 
 
-# -------------------------------------------
+# ------------------------------------------------------------
 # ✅ INVENTORY (Staff/Admin only)
-# -------------------------------------------
+# ------------------------------------------------------------
 class InventoryViewSet(viewsets.ModelViewSet):
     queryset = Inventory.objects.all()
     serializer_class = InventorySerializer
     permission_classes = [permissions.IsAuthenticated, IsStaffOrAdmin]
 
 
-# -------------------------------------------
+# ------------------------------------------------------------
 # ✅ ORDERS (Customers create, Staff/Admin manage)
-# -------------------------------------------
+# ------------------------------------------------------------
 class OrderViewSet(viewsets.ModelViewSet):
-    queryset = Order.objects.all().order_by('-timestamp')
+    queryset = Order.objects.all().order_by('-created_at')
     serializer_class = OrderSerializer
 
     def get_permissions(self):
-        """
-        - Customers: create orders
-        - Staff/Admin: view, update, delete, change status
-        """
-        if self.action in ['create']:
+        if self.action == 'create':
             permission_classes = [permissions.IsAuthenticated]
         elif self.action in ['list', 'update', 'partial_update', 'destroy', 'update_status']:
             permission_classes = [permissions.IsAuthenticated, IsStaffOrAdmin]
@@ -107,18 +105,14 @@ class OrderViewSet(viewsets.ModelViewSet):
         return Response({'success': f'Order status updated to {new_status}'})
 
 
-# -------------------------------------------
-# ✅ RESERVATIONS (Customers can book, Staff/Admin manage)
-# -------------------------------------------
+# ------------------------------------------------------------
+# ✅ RESERVATIONS (Customers book, Staff/Admin manage)
+# ------------------------------------------------------------
 class ReservationViewSet(viewsets.ModelViewSet):
     queryset = Reservation.objects.all()
     serializer_class = ReservationSerializer
 
     def get_permissions(self):
-        """
-        - Customers can create reservations
-        - Staff/Admin can list, update, and delete
-        """
         if self.action == 'create':
             permission_classes = [permissions.IsAuthenticated]
         else:
